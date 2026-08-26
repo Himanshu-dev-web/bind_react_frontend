@@ -14,203 +14,300 @@ import {
   ITCLedgerSummary
 } from "../types/index.js";
 
+const rawBaseUrl = import.meta.env.VITE_API_URL || "";
+const apiBase = rawBaseUrl
+  ? `${rawBaseUrl.replace(/\/+$/, "")}/api`
+  : "/api";
+
 const api = axios.create({
-  baseURL: "/api"
+  baseURL: apiBase
+});
+
+function sanitizeYear(year?: string): string {
+  if (!year || year === "undefined" || year === "null" || year.trim() === "") {
+    return localStorage.getItem("billing_year") || "2026-27";
+  }
+  return year.trim();
+}
+
+// Attach tenant & auth headers automatically to all API calls
+api.interceptors.request.use((reqConfig) => {
+  const token = localStorage.getItem("billing_token");
+  const company = localStorage.getItem("billing_company");
+  const dbKey = localStorage.getItem("billing_database_key");
+  const year = sanitizeYear(localStorage.getItem("billing_year") || undefined);
+
+  if (token) {
+    reqConfig.headers["Authorization"] = `Bearer ${token}`;
+  }
+  if (dbKey) {
+    reqConfig.headers["x-database-key"] = dbKey;
+  }
+  if (company) {
+    reqConfig.headers["x-company-code"] = company;
+  }
+  if (year) {
+    reqConfig.headers["x-financial-year"] = year;
+  }
+  return reqConfig;
 });
 
 export const apiClient = {
-  // Configuration & Firms
-  getFinancialYears: async (): Promise<string[]> => {
-    const res = await api.get("/config/financial-years");
-    return res.data.years;
+  // Companies & Multi-Tenant Selection
+  getCompanies: async (): Promise<{ companyCode: string; companyName: string }[]> => {
+    const res = await api.get("/config/companies");
+    return res.data.companies || [];
   },
 
-  getCompanyProfile: async (year: string): Promise<CompanyProfile> => {
-    const res = await api.get(`/config/company?year=${year}`);
+  // Configuration & Firms
+  getFinancialYears: async (): Promise<any[]> => {
+    const res = await api.get("/config/financial-years");
+    return res.data.years || [];
+  },
+
+  getCompanyProfile: async (year?: string): Promise<CompanyProfile> => {
+    const y = sanitizeYear(year);
+    const res = await api.get(`/config/company?year=${y}`);
     return res.data.company;
   },
 
-  getFirms: async (year: string): Promise<Firm[]> => {
-    const res = await api.get(`/config/firms?year=${year}`);
-    return res.data.firms;
+  getFirms: async (year?: string): Promise<Firm[]> => {
+    const y = sanitizeYear(year);
+    const res = await api.get(`/config/firms?year=${y}`);
+    return res.data.firms || [];
   },
 
-  saveFirm: async (year: string, firm: Partial<Firm>): Promise<Firm> => {
-    const res = await api.post(`/config/firms?year=${year}`, firm);
+  saveFirm: async (year: string | undefined, firm: Partial<Firm>): Promise<Firm> => {
+    const y = sanitizeYear(year);
+    const res = await api.post(`/config/firms?year=${y}`, firm);
     return res.data.firm;
   },
 
   // Customers
-  getCustomers: async (year: string, search?: string): Promise<Customer[]> => {
-    const res = await api.get(`/customers?year=${year}${search ? `&search=${encodeURIComponent(search)}` : ""}`);
-    return res.data.customers;
+  getCustomers: async (year?: string, search?: string): Promise<Customer[]> => {
+    const y = sanitizeYear(year);
+    const res = await api.get(`/customers?year=${y}${search ? `&search=${encodeURIComponent(search)}` : ""}`);
+    return res.data.customers || [];
   },
 
-  saveCustomer: async (year: string, customer: Partial<Customer>): Promise<Customer> => {
-    const res = await api.post(`/customers?year=${year}`, customer);
+  saveCustomer: async (year: string | undefined, customer: Partial<Customer>): Promise<Customer> => {
+    const y = sanitizeYear(year);
+    const res = await api.post(`/customers?year=${y}`, customer);
     return res.data.customer;
   },
 
   // Suppliers
-  getSuppliers: async (year: string, search?: string): Promise<Supplier[]> => {
-    const res = await api.get(`/suppliers?year=${year}${search ? `&search=${encodeURIComponent(search)}` : ""}`);
-    return res.data.suppliers;
+  getSuppliers: async (year?: string, search?: string): Promise<Supplier[]> => {
+    const y = sanitizeYear(year);
+    const res = await api.get(`/suppliers?year=${y}${search ? `&search=${encodeURIComponent(search)}` : ""}`);
+    return res.data.suppliers || [];
   },
 
-  saveSupplier: async (year: string, supplier: Partial<Supplier>): Promise<Supplier> => {
-    const res = await api.post(`/suppliers?year=${year}`, supplier);
+  saveSupplier: async (year: string | undefined, supplier: Partial<Supplier>): Promise<Supplier> => {
+    const y = sanitizeYear(year);
+    const res = await api.post(`/suppliers?year=${y}`, supplier);
     return res.data.supplier;
   },
 
   // Items
-  getItems: async (year: string, group?: string, search?: string): Promise<Item[]> => {
-    let url = `/items?year=${year}`;
+  getItems: async (year?: string, group?: string, search?: string): Promise<Item[]> => {
+    const y = sanitizeYear(year);
+    let url = `/items?year=${y}`;
     if (group && group !== "ALL") url += `&group=${encodeURIComponent(group)}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     const res = await api.get(url);
-    return res.data.items;
+    return res.data.items || [];
   },
 
-  saveItem: async (year: string, item: Partial<Item>): Promise<Item> => {
-    const res = await api.post(`/items?year=${year}`, item);
+  saveItem: async (year: string | undefined, item: Partial<Item>): Promise<Item> => {
+    const y = sanitizeYear(year);
+    const res = await api.post(`/items?year=${y}`, item);
     return res.data.item;
   },
 
-  getItemGroups: async (year: string): Promise<string[]> => {
-    const res = await api.get(`/items/groups?year=${year}`);
-    return res.data.groups;
+  getItemGroups: async (year?: string): Promise<string[]> => {
+    const y = sanitizeYear(year);
+    const res = await api.get(`/items/groups?year=${y}`);
+    return res.data.groups || [];
   },
 
   // Units
-  getUnits: async (year: string): Promise<UnitMaster[]> => {
-    const res = await api.get(`/units?year=${year}`);
-    return res.data.units;
+  getUnits: async (year?: string): Promise<UnitMaster[]> => {
+    const y = sanitizeYear(year);
+    const res = await api.get(`/units?year=${y}`);
+    return res.data.units || [];
   },
 
-  saveUnit: async (year: string, unit: Partial<UnitMaster>): Promise<UnitMaster> => {
-    const res = await api.post(`/units?year=${year}`, unit);
+  saveUnit: async (a: any, b?: any): Promise<UnitMaster> => {
+    const unit = typeof a === "object" ? a : b;
+    const rawYear = typeof a === "string" ? a : typeof b === "string" ? b : "";
+    const y = sanitizeYear(rawYear);
+    const res = await api.post(`/units?year=${y}`, unit);
     return res.data.unit;
   },
 
   // Invoices
-  getInvoices: async (year: string, type: InvoiceType, search?: string, firm?: string): Promise<InvoiceHeader[]> => {
-    let url = `/invoices?year=${year}&type=${type}`;
-    if (search) url += `&search=${encodeURIComponent(search)}`;
+  getInvoices: async (year?: string, type?: string, search?: string, firm?: string): Promise<InvoiceHeader[]> => {
+    const y = sanitizeYear(year);
+    let url = `/invoices?year=${y}`;
+    if (type && type !== "ALL") url += `&type=${encodeURIComponent(type)}`;
     if (firm && firm !== "ALL") url += `&firm=${encodeURIComponent(firm)}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
     const res = await api.get(url);
-    return res.data.invoices;
+    return res.data.invoices || [];
   },
 
-  getNextInvoiceNo: async (year: string, type: InvoiceType, firm?: string): Promise<number> => {
-    let url = `/invoices/next-number?year=${year}&type=${type}`;
+  getInvoiceByNo: async (
+    year: string | undefined,
+    invoiceNo: number | string,
+    type?: string,
+    firm?: string
+  ): Promise<{ invoice: InvoiceHeader; amountInWords: string }> => {
+    const y = sanitizeYear(year);
+    let url = `/invoices/${invoiceNo}?year=${y}`;
+    if (type) url += `&type=${encodeURIComponent(type)}`;
+    if (firm) url += `&firm=${encodeURIComponent(firm)}`;
+    const res = await api.get(url);
+    return res.data;
+  },
+
+  getNavInvoice: async (...args: any[]): Promise<{ invoice: InvoiceHeader; amountInWords: string }> => {
+    const y = sanitizeYear(args[0]);
+    let firm = "";
+    let direction = "first";
+    let currentNo = 1;
+    let type = "";
+
+    if (typeof args[1] === "string" && ["first", "prev", "next", "last"].includes(args[2])) {
+      // Form: (year, firm, direction, currentNo, type)
+      firm = args[1];
+      direction = args[2];
+      currentNo = typeof args[3] === "number" ? args[3] : parseInt(args[3], 10) || 1;
+      type = args[4] || "";
+    } else {
+      // Form: (year, currentNo, direction, type, firm)
+      currentNo = typeof args[1] === "number" ? args[1] : parseInt(args[1], 10) || 1;
+      direction = args[2] || "first";
+      type = args[3] || "";
+      firm = args[4] || "";
+    }
+
+    let url = `/invoices/nav?year=${y}&current=${currentNo}&direction=${direction}`;
+    if (type) url += `&type=${encodeURIComponent(type)}`;
+    if (firm) url += `&firm=${encodeURIComponent(firm)}`;
+    const res = await api.get(url);
+    return res.data;
+  },
+
+  getNextInvoiceNo: async (year?: string, type?: string, firm?: string): Promise<number> => {
+    const y = sanitizeYear(year);
+    let url = `/invoices/next-number?year=${y}`;
+    if (type) url += `&type=${encodeURIComponent(type)}`;
     if (firm) url += `&firm=${encodeURIComponent(firm)}`;
     const res = await api.get(url);
     return res.data.nextNo;
   },
 
-  getInvoiceByNo: async (year: string, invoiceNo: number, type: InvoiceType, firm?: string): Promise<{ invoice: InvoiceHeader; amountInWords: string }> => {
-    let url = `/invoices/${invoiceNo}?year=${year}&type=${type}`;
-    if (firm) url += `&firm=${encodeURIComponent(firm)}`;
-    const res = await api.get(url);
-    return res.data;
-  },
-
-  getNavInvoice: async (
-    year: string,
-    firm: string,
-    action: "first" | "prev" | "next" | "last",
-    currentNo?: number
+  saveInvoice: async (
+    year: string | undefined,
+    invoice: Partial<InvoiceHeader>
   ): Promise<{ invoice: InvoiceHeader; amountInWords: string }> => {
-    let url = `/invoices/nav?year=${year}&firm=${encodeURIComponent(firm)}&action=${action}`;
-    if (currentNo) url += `&currentNo=${currentNo}`;
-    const res = await api.get(url);
+    const y = sanitizeYear(year);
+    const res = await api.post(`/invoices?year=${y}`, invoice);
     return res.data;
   },
 
-  saveInvoice: async (year: string, invoice: InvoiceHeader): Promise<{ invoice: InvoiceHeader; amountInWords: string }> => {
-    const res = await api.post(`/invoices?year=${year}`, invoice);
-    return res.data;
-  },
-
-  deleteInvoice: async (year: string, invoiceNo: number, type: InvoiceType, firm?: string): Promise<boolean> => {
-    let url = `/invoices/${invoiceNo}?year=${year}&type=${type}`;
+  deleteInvoice: async (year: string | undefined, invoiceNo: number | string, type?: string, firm?: string): Promise<boolean> => {
+    const y = sanitizeYear(year);
+    let url = `/invoices/${invoiceNo}?year=${y}`;
+    if (type) url += `&type=${encodeURIComponent(type)}`;
     if (firm) url += `&firm=${encodeURIComponent(firm)}`;
     const res = await api.delete(url);
     return res.data.success;
   },
 
-  // ITC Book Module
+  // Accounts & Receipts
+  getReceipts: async (year?: string, search?: string, firm?: string): Promise<Receipt[]> => {
+    const y = sanitizeYear(year);
+    let url = `/receipts?year=${y}`;
+    if (firm && firm !== "ALL") url += `&firm=${encodeURIComponent(firm)}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const res = await api.get(url);
+    return res.data.receipts || [];
+  },
+
+  saveReceipt: async (year: string | undefined, receipt: Partial<Receipt>): Promise<Receipt> => {
+    const y = sanitizeYear(year);
+    const res = await api.post(`/receipts?year=${y}`, receipt);
+    return res.data.receipt;
+  },
+
+  getPartyLedger: async (
+    year: string | undefined,
+    partyName: string,
+    partyType: "CUSTOMER" | "SUPPLIER" | "customer" | "supplier",
+    startDate?: string,
+    endDate?: string
+  ): Promise<PartyLedgerStatement> => {
+    const y = sanitizeYear(year);
+    const normalizedType = String(partyType).toUpperCase();
+    let url = `/reports/ledger?year=${y}&partyName=${encodeURIComponent(partyName)}&partyType=${normalizedType}`;
+    if (startDate) url += `&startDate=${startDate}`;
+    if (endDate) url += `&endDate=${endDate}`;
+    const res = await api.get(url);
+    return res.data.ledger;
+  },
+
+  // ITC Book
   getITCRecords: async (
-    year: string,
-    issueRec?: "R" | "D" | "ALL",
+    year?: string,
+    issueRec?: "R" | "D" | "ALL" | string,
     group?: string,
     bookName?: string,
     search?: string
   ): Promise<ITCRecord[]> => {
-    let url = `/itc?year=${year}`;
-    if (issueRec && issueRec !== "ALL") url += `&type=${issueRec}`;
+    const y = sanitizeYear(year);
+    let url = `/itc?year=${y}`;
+    if (issueRec) url += `&type=${issueRec}`;
     if (group && group !== "ALL") url += `&group=${encodeURIComponent(group)}`;
     if (bookName) url += `&bookName=${encodeURIComponent(bookName)}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     const res = await api.get(url);
-    return res.data.records;
+    return res.data.records || [];
   },
 
-  getNextITCEntryNo: async (year: string): Promise<number> => {
-    const res = await api.get(`/itc/next-number?year=${year}`);
+  getNextITCEntryNo: async (year?: string): Promise<number> => {
+    const y = sanitizeYear(year);
+    const res = await api.get(`/itc/next-number?year=${y}`);
     return res.data.nextNo;
   },
 
-  saveITCRecord: async (year: string, record: Partial<ITCRecord>): Promise<ITCRecord> => {
-    const res = await api.post(`/itc?year=${year}`, record);
+  saveITCRecord: async (year: string | undefined, record: Partial<ITCRecord>): Promise<ITCRecord> => {
+    const y = sanitizeYear(year);
+    const res = await api.post(`/itc?year=${y}`, record);
     return res.data.record;
   },
 
-  deleteITCRecord: async (year: string, entryNo: number): Promise<boolean> => {
-    const res = await api.delete(`/itc/${entryNo}?year=${year}`);
+  deleteITCRecord: async (year: string | undefined, entryNo: number | string, type?: "R" | "D" | string): Promise<boolean> => {
+    const y = sanitizeYear(year);
+    let url = `/itc/${entryNo}?year=${y}`;
+    if (type) url += `&type=${type}`;
+    const res = await api.delete(url);
     return res.data.success;
   },
 
-  getITCLedger: async (
-    year: string,
-    group?: string,
-    bookName?: string,
-    fromDate?: string,
-    toDate?: string
-  ): Promise<ITCLedgerSummary> => {
-    let url = `/itc/ledger?year=${year}`;
+  getITCLedger: async (...args: any[]): Promise<ITCLedgerSummary> => {
+    const y = sanitizeYear(args[0]);
+    const group = args[1] || "";
+    const bookName = args[2] || "";
+    const fromDate = args[3] || "";
+    const toDate = args[4] || "";
+    let url = `/itc/ledger?year=${y}`;
     if (group && group !== "ALL") url += `&group=${encodeURIComponent(group)}`;
     if (bookName && bookName !== "ALL") url += `&bookName=${encodeURIComponent(bookName)}`;
-    if (fromDate) url += `&fromDate=${fromDate}`;
-    if (toDate) url += `&toDate=${toDate}`;
+    if (fromDate) url += `&startDate=${fromDate}`;
+    if (toDate) url += `&endDate=${toDate}`;
     const res = await api.get(url);
     return res.data.ledger;
-  },
-
-  // Accounts & Ledgers
-  getPartyLedger: async (
-    year: string,
-    partyName: string,
-    partyType: "customer" | "supplier",
-    fromDate: string,
-    toDate: string,
-    firm?: string
-  ): Promise<PartyLedgerStatement> => {
-    let url = `/reports/ledger?year=${year}&partyName=${encodeURIComponent(partyName)}&partyType=${partyType}&fromDate=${fromDate}&toDate=${toDate}`;
-    if (firm && firm !== "ALL") url += `&firm=${encodeURIComponent(firm)}`;
-    const res = await api.get(url);
-    return res.data.ledger;
-  },
-
-  getReceipts: async (year: string, search?: string, firm?: string): Promise<Receipt[]> => {
-    let url = `/receipts?year=${year}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
-    if (firm && firm !== "ALL") url += `&firm=${encodeURIComponent(firm)}`;
-    const res = await api.get(url);
-    return res.data.receipts;
-  },
-
-  saveReceipt: async (year: string, receipt: Partial<Receipt>): Promise<Receipt> => {
-    const res = await api.post(`/receipts?year=${year}`, receipt);
-    return res.data.receipt;
   }
 };

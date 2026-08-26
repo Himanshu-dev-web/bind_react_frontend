@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus,
   Save,
@@ -89,6 +89,10 @@ export const CreateInvoice: React.FC<CreateInvoiceProps> = ({ currentYear, compa
   const [isBillSearchOpen, setIsBillSearchOpen] = useState(false);
   const [isItemLookupOpen, setIsItemLookupOpen] = useState(false);
   const [activeItemRowIndex, setActiveItemRowIndex] = useState<number | null>(null);
+
+  const bookGroups = useMemo(() => {
+    return Array.from(new Set(allItems.map((it) => it.itemGp).filter(Boolean))) as string[];
+  }, [allItems]);
 
   // Print Modal
   const [isPrintOpen, setIsPrintOpen] = useState(false);
@@ -256,7 +260,11 @@ export const CreateInvoice: React.FC<CreateInvoiceProps> = ({ currentYear, compa
     try {
       const cur = parseInt(billNoInput, 10) || 1;
       const res = await apiClient.getNavInvoice(currentYear, selectedFirmName, action, cur);
-      loadInvoiceIntoForm(res.invoice);
+      if (res?.invoice) {
+        loadInvoiceIntoForm(res.invoice);
+      } else {
+        setStatusMessage({ type: "error", text: "No invoice found in this direction." });
+      }
     } catch (err: any) {
       setStatusMessage({ type: "error", text: err.response?.data?.error || "No invoice found in this direction." });
     } finally {
@@ -265,14 +273,15 @@ export const CreateInvoice: React.FC<CreateInvoiceProps> = ({ currentYear, compa
     }
   };
 
-  const loadInvoiceIntoForm = (inv: InvoiceHeader) => {
-    setBillNoInput(String(inv.invoiceNo));
-    setBillDate(inv.invoiceDate || new Date().toISOString().split("T")[0]);
-    setSelectedFirmName(inv.firmName || "DEVA BOOK BINDING HOUSE");
+  const loadInvoiceIntoForm = (inv: InvoiceHeader | null | undefined) => {
+    if (!inv) return;
+    setBillNoInput(String(inv.invoiceNo || 1));
+    setBillDate(inv.invoiceDate ? String(inv.invoiceDate).split("T")[0] : new Date().toISOString().split("T")[0]);
+    if (inv.firmName) setSelectedFirmName(inv.firmName);
     setPlaceOfSupply(inv.placeOfSupply || "MEERUT");
     setVehicleNo(inv.vehicleNo || "");
     setTransMode(inv.transMode || "");
-    setDateOfSupp(inv.dateOfSupply || "");
+    setDateOfSupp(inv.dateOfSupply ? String(inv.dateOfSupply).split("T")[0] : "");
 
     setBilledToName(inv.customerName || "");
     setBilledToAddress(inv.address || "");
@@ -284,7 +293,7 @@ export const CreateInvoice: React.FC<CreateInvoiceProps> = ({ currentYear, compa
     setShippedToGstin(inv.gstin || "");
     setShippedToPan(inv.pan || "");
 
-    if (inv.items && inv.items.length > 0) {
+    if (Array.isArray(inv.items) && inv.items.length > 0) {
       setItems(inv.items);
     } else {
       setItems([{ sNo: 1, remarks: "Title", description: "", itemName: "", hsnCode: "", rate: 1, qty: 0, amount: 0 }]);
@@ -751,6 +760,8 @@ export const CreateInvoice: React.FC<CreateInvoiceProps> = ({ currentYear, compa
             <EditableGrid
               items={items}
               onChange={setItems}
+              bookGroups={bookGroups}
+              allItems={allItems}
               onOpenItemLookup={(idx) => {
                 setActiveItemRowIndex(idx);
                 setIsItemLookupOpen(true);
@@ -1053,9 +1064,9 @@ export const CreateInvoice: React.FC<CreateInvoiceProps> = ({ currentYear, compa
         onClose={() => setIsItemLookupOpen(false)}
         onSelect={handleSelectItem}
         items={allItems.map((it) => ({
-          id: String(it.autoId || it.itemName),
-          primary: it.itemName,
-          secondary: `${it.itemGp || ""} | Rate: ₹${it.rate.toFixed(2)}`,
+          id: String(it.autoId || it.itemName || ""),
+          primary: it.itemName || "",
+          secondary: `${it.itemGp || ""} | Rate: ₹${Number(it.rate || 0).toFixed(2)}`,
           data: it
         }))}
       />

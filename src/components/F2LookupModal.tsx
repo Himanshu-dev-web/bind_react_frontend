@@ -23,7 +23,7 @@ export const F2LookupModal: React.FC<F2LookupModalProps> = ({
   isOpen,
   onClose,
   onSelect,
-  items,
+  items = [],
   placeholder = "Type to search..."
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -39,13 +39,15 @@ export const F2LookupModal: React.FC<F2LookupModalProps> = ({
     }
   }, [isOpen]);
 
-  const filteredItems = items.filter((item) => {
-    const q = searchTerm.toLowerCase();
-    return (
-      item.primary.toLowerCase().includes(q) ||
-      (item.secondary && item.secondary.toLowerCase().includes(q)) ||
-      (item.meta && item.meta.toLowerCase().includes(q))
-    );
+  const safeItems = Array.isArray(items) ? items : [];
+
+  const filteredItems = safeItems.filter((item) => {
+    if (!item) return false;
+    const q = (searchTerm || "").toLowerCase().trim();
+    const primary = String(item.primary || "").toLowerCase();
+    const secondary = String(item.secondary || "").toLowerCase();
+    const meta = String(item.meta || "").toLowerCase();
+    return primary.includes(q) || secondary.includes(q) || meta.includes(q);
   });
 
   useEffect(() => {
@@ -71,76 +73,95 @@ export const F2LookupModal: React.FC<F2LookupModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    const selectedElement = listRef.current?.children[selectedIndex] as HTMLElement;
+    if (selectedElement && listRef.current) {
+      const list = listRef.current;
+      const top = selectedElement.offsetTop;
+      const bottom = top + selectedElement.offsetHeight;
+      if (top < list.scrollTop) {
+        list.scrollTop = top;
+      } else if (bottom > list.scrollTop + list.offsetHeight) {
+        list.scrollTop = bottom - list.offsetHeight;
+      }
+    }
+  }, [selectedIndex]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="flex flex-col w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-100">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-          <div>
-            <h3 className="font-semibold text-lg text-slate-800">{title}</h3>
-            <p className="text-xs text-slate-500">Press ↑ ↓ to navigate, Enter to select, Esc to close</p>
+        <div className="px-4 py-3 bg-slate-800 text-white flex items-center justify-between border-b border-slate-700">
+          <div className="flex items-center space-x-2">
+            <Search className="w-4 h-4 text-primary-400" />
+            <h3 className="font-bold text-sm tracking-wide">{title}</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+            className="text-slate-400 hover:text-white rounded-lg p-1 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="p-4 border-b border-slate-100">
+        {/* Search Input */}
+        <div className="p-3 border-b border-slate-100 bg-slate-50">
           <div className="relative">
-            <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               ref={inputRef}
               type="text"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent font-medium"
+              placeholder={placeholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
             />
+          </div>
+          <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1 px-1">
+            <span>↑↓ to navigate, ENTER to select, ESC to exit</span>
+            <span>{filteredItems.length} match{filteredItems.length === 1 ? "" : "es"}</span>
           </div>
         </div>
 
         {/* List */}
-        <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-slate-100 min-h-[300px]">
+        <div ref={listRef} className="overflow-y-auto flex-1 divide-y divide-slate-100 max-h-[50vh]">
           {filteredItems.length === 0 ? (
-            <div className="py-12 text-center text-slate-400 text-sm">No matching records found.</div>
+            <div className="p-8 text-center text-slate-400 text-sm">
+              No matching records found.
+            </div>
           ) : (
-            filteredItems.map((item, idx) => {
-              const isSelected = idx === selectedIndex;
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => {
-                    onSelect(item.data);
-                    onClose();
-                  }}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                  className={`px-6 py-3 cursor-pointer flex items-center justify-between transition-colors ${
-                    isSelected ? "bg-primary-50 text-primary-900 border-l-4 border-primary-600" : "hover:bg-slate-50"
-                  }`}
-                >
-                  <div>
-                    <div className="font-medium text-sm text-slate-900">{item.primary}</div>
-                    {item.secondary && <div className="text-xs text-slate-500 mt-0.5">{item.secondary}</div>}
-                  </div>
+            filteredItems.map((item, idx) => (
+              <div
+                key={`${item.id}-${idx}`}
+                onClick={() => {
+                  onSelect(item.data);
+                  onClose();
+                }}
+                className={`px-4 py-2.5 cursor-pointer flex flex-col transition-colors ${
+                  idx === selectedIndex
+                    ? "bg-primary-50 text-primary-900 border-l-4 border-primary-600 pl-3"
+                    : "hover:bg-slate-50 text-slate-700"
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-sm">{item.primary}</span>
                   {item.meta && (
-                    <div className="text-xs font-semibold px-2 py-1 bg-slate-100 text-slate-600 rounded">
+                    <span className="text-[11px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                       {item.meta}
-                    </div>
+                    </span>
                   )}
                 </div>
-              );
-            })
+                {item.secondary && (
+                  <span className="text-xs text-slate-500 mt-0.5">{item.secondary}</span>
+                )}
+              </div>
+            ))
           )}
         </div>
       </div>
     </div>
   );
 };
-

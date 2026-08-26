@@ -161,21 +161,21 @@ export const ItemList: React.FC<ItemListProps> = ({ currentYear }) => {
                   </td>
                 </tr>
               ) : (
-                items.map((it) => (
-                  <tr key={it.autoId || it.itemName} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-slate-400">{it.autoId}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">{it.itemName}</td>
+                items.map((it, idx) => (
+                  <tr key={it.autoId || it.itemName || it.name || idx} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-slate-400">{it.autoId || idx + 1}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">{it.itemName || it.name}</td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium">
-                        {it.itemGp}
+                        {it.itemGp || it.group || "General"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-600">{it.hsnCode || "—"}</td>
+                    <td className="px-4 py-3 font-mono text-slate-600">{it.hsnCode || "4901"}</td>
                     <td className="px-4 py-3 text-slate-600">{it.unit || "Pcs"}</td>
                     <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
-                      ₹{it.rate.toFixed(2)}
+                      ₹{Number(it.rate || 0).toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-600">{it.openingStock}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-600">{it.openingStock || 0}</td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => openEditModal(it)}

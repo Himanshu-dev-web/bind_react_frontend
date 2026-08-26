@@ -1,12 +1,13 @@
 import React, { useRef, useEffect } from "react";
 import { Trash2, Plus, Search } from "lucide-react";
-import { InvoiceLineItem } from "../types/index.js";
+import { InvoiceLineItem, Item } from "../types/index.js";
 
 interface EditableGridProps {
   items: InvoiceLineItem[];
   onChange: (items: InvoiceLineItem[]) => void;
   onOpenItemLookup: (index: number) => void;
   bookGroups?: string[];
+  allItems?: Item[];
 }
 
 const TYPE_OPTIONS = [
@@ -31,7 +32,8 @@ export const EditableGrid: React.FC<EditableGridProps> = ({
   items,
   onChange,
   onOpenItemLookup,
-  bookGroups = []
+  bookGroups = [],
+  allItems = []
 }) => {
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | HTMLSelectElement | null }>({});
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -46,6 +48,18 @@ export const EditableGrid: React.FC<EditableGridProps> = ({
       item.amount = Number((qty * rate).toFixed(2));
     } else if (field === "amount") {
       item.amount = parseFloat(value) || 0;
+    } else if (field === "itemName" && value && allItems.length > 0) {
+      // Auto-populate group & rate if matched from catalog
+      const match = allItems.find(
+        (it) => it.itemName.trim().toLowerCase() === String(value).trim().toLowerCase()
+      );
+      if (match) {
+        if (!item.description) item.description = match.itemGp || "";
+        if (!item.rate || item.rate === 1) {
+          item.rate = match.rate || 1;
+          item.amount = Number(((item.qty || 0) * (match.rate || 1)).toFixed(2));
+        }
+      }
     }
 
     updated[index] = item;
@@ -112,6 +126,13 @@ export const EditableGrid: React.FC<EditableGridProps> = ({
 
   return (
     <div className="border border-emerald-600 rounded-lg shadow-sm overflow-hidden bg-white">
+      {/* Autocomplete datalist for Book Groups */}
+      <datalist id="book-groups-datalist">
+        {bookGroups.map((grp) => (
+          <option key={grp} value={grp} />
+        ))}
+      </datalist>
+
       {/* Scrollable Table Viewport with Sticky Header */}
       <div
         ref={tableContainerRef}
@@ -160,6 +181,7 @@ export const EditableGrid: React.FC<EditableGridProps> = ({
                   <input
                     ref={(el) => (inputRefs.current[`${idx}_description`] = el)}
                     type="text"
+                    list="book-groups-datalist"
                     value={item.description || ""}
                     onChange={(e) => handleCellChange(idx, "description", e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, idx, "description")}
@@ -191,7 +213,7 @@ export const EditableGrid: React.FC<EditableGridProps> = ({
                   </div>
                 </td>
 
-                {/* Farm */}
+                {/* Farm / HSN */}
                 <td className="py-1 px-1 border-r border-slate-200">
                   <input
                     type="text"
@@ -241,13 +263,13 @@ export const EditableGrid: React.FC<EditableGridProps> = ({
                   />
                 </td>
 
-                {/* Delete Button */}
+                {/* Action Remove */}
                 <td className="py-1 px-1 text-center">
                   <button
                     type="button"
-                    tabIndex={-1}
                     onClick={() => removeRow(idx)}
-                    className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                    tabIndex={-1}
+                    className="text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -258,17 +280,18 @@ export const EditableGrid: React.FC<EditableGridProps> = ({
         </table>
       </div>
 
-      {/* Add Row Bar */}
-      <div className="bg-slate-50 px-3 py-1.5 border-t border-slate-200 flex justify-between items-center text-xs">
+      {/* Grid Footer Controls */}
+      <div className="p-1.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-[11px]">
+        <span className="text-slate-500">
+          Total Items: <strong>{items.length}</strong> | Press <strong>F2</strong> on Book Name for Title Lookup | <strong>ENTER</strong> on Amount to Add Row
+        </span>
         <button
           type="button"
           onClick={addRow}
-          className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold px-2 py-1 rounded hover:bg-primary-50 transition-colors cursor-pointer"
+          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] shadow-sm transition-all flex items-center gap-1 cursor-pointer"
         >
-          <Plus className="w-3.5 h-3.5" />
-          Add Line Item (or press Enter on Qty/Amount)
+          <Plus className="w-3.5 h-3.5" /> Add Row
         </button>
-        <span className="text-slate-500 text-[11px] font-medium">Total Items: {items.length}</span>
       </div>
     </div>
   );

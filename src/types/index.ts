@@ -58,6 +58,9 @@ export interface Item {
   autoId?: number;
   itemGp: string;
   itemName: string;
+  name?: string;
+  group?: string;
+  itemCode?: string;
   unit: string;
   rate: number;
   rate1?: number;
